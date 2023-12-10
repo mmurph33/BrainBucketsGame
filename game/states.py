@@ -1,3 +1,4 @@
+import logging
 from cmu_graphics import *
 from PIL import Image as PILImage
 from tools import Button
@@ -246,21 +247,22 @@ class MazeState(GameState):
         def __hash__(self):
             return hash((self.row, self.col))
 
-        def getCellDetails(self, row, col):
-            cWidth = self.mazeState.mazeWidth // self.mazeState.cols
-            cHeight = self.mazeState.mazeWidth // self.mazeState.rows
-            cLeft = self.mazeState.mazeLeft + row * cWidth
-            cTop = self.mazeState.mazeTop + col * cHeight
-            return (cWidth, cHeight, cLeft, cTop)
+        def getCellDetails(self):
+            # Ensure that mazeState is correctly used here
+            cellWidth = self.mazeState.mazeWidth // self.mazeState.cols
+            cellHeight = self.mazeState.mazeHeight // self.mazeState.rows
+            cellLeft = self.mazeState.mazeLeft + self.col * cellWidth
+            cellTop = self.mazeState.mazeTop + self.row * cellHeight
+            return cellWidth, cellHeight, cellLeft, cellTop
 
-        def draw(self, row, col):
-            cWidth, cHeight, cLeft, cTop = self.getCellDetails(row, col)
+        def draw(self):
+            cellWidth, cellHeight, cellLeft, cellTop = self.getCellDetails()
             if self.isStart:
                 drawRect(
-                    cLeft + 2,
-                    cTop + 2,
-                    cWidth - 2,
-                    cHeight - 2,
+                    cellLeft + 2,
+                    cellTop + 2,
+                    cellWidth - 2,
+                    cellHeight - 2,
                     fill=gradient(
                         "lightBlue", "powderBlue", "paleTurquoise", start="center"
                     ),
@@ -268,60 +270,42 @@ class MazeState(GameState):
                 )
             if self.isExit:
                 drawStar(
-                    cLeft + cWidth / 2,
-                    cTop + cHeight / 2,
-                    min(cWidth, cHeight) / 4,
+                    cellLeft + cellWidth / 2,
+                    cellTop + cellHeight / 2,
+                    min(cellWidth, cellHeight) / 4,
                     5,
                     fill="yellow",
                     border="whiteSmoke",
                     borderWidth=1,
                     align="center",
                 )
-            if self.walls["top"]:
-                drawLine(
-                    cLeft,
-                    cTop,
-                    cLeft + cWidth,
-                    cTop,
-                    fill="whiteSmoke",
-                    lineWidth=5,
-                )
-            if self.walls["bottom"]:
-                drawLine(
-                    cLeft,
-                    cTop + cHeight,
-                    cLeft + cWidth,
-                    cTop + cHeight,
-                    fill="whiteSmoke",
-                    lineWidth=5,
-                )
-            if self.walls["left"]:
-                drawLine(
-                    cLeft,
-                    cTop,
-                    cLeft,
-                    cTop + cHeight,
-                    fill="whiteSmoke",
-                    lineWidth=5,
-                )
-            if self.walls["right"]:
-                drawLine(
-                    cLeft + cWidth,
-                    cTop,
-                    cLeft + cWidth,
-                    cTop + cHeight,
-                    fill="whiteSmoke",
-                    lineWidth=5,
-                )
+            wall_positions = {
+                "top": (cellLeft, cellTop, cellLeft + cellWidth, cellTop),
+                "bottom": (
+                    cellLeft,
+                    cellTop + cellHeight,
+                    cellLeft + cellWidth,
+                    cellTop + cellHeight,
+                ),
+                "left": (cellLeft, cellTop, cellLeft, cellTop + cellHeight),
+                "right": (
+                    cellLeft + cellWidth,
+                    cellTop,
+                    cellLeft + cellWidth,
+                    cellTop + cellHeight,
+                ),
+            }
+            for wall, positions in wall_positions.items():
+                if self.walls[wall]:
+                    drawLine(*positions, fill="whiteSmoke", lineWidth=5)
 
     def __init__(self, app):
         super().__init__(app)
         self.rows = 6
         self.cols = 6
-        self.mazeWidth = self.gameApp.width // 3
-        self.mazeHeight = self.gameApp.height // 3
-        self.mazeLeft = self.gameApp.width // 3
-        self.mazeTop = self.gameApp.height // 3
+        self.mazeWidth, self.mazeHeight, self.mazeLeft, self.mazeTop = (
+            self.gameApp.width // 3,
+        ) * 4
         self.directionMap = {
             (0, -1): {"delta": "top", "currentWall": "top", "nextWall": "bottom"},
             (0, 1): {"delta": "bottom", "currentWall": "bottom", "nextWall": "top"},
@@ -334,29 +318,51 @@ class MazeState(GameState):
         )
 
     def generateMaze(self, rows, cols):
-        print("Generating maze...")
-        self.maze = [[self.Cell(r, c, self) for r in range(rows)] for c in range(cols)]
-
-        startRow, startCol = rnd.randint(0, rows - 1), rnd.randint(0, cols - 1)
-        self.start = self.maze[startRow][startCol]
-        self.start.isStart = True
-        self.mazeBacktrack(self.start)
-        self.findExit(self.start)
-        print("Maze generated with start at:", startRow, startCol)
+        self.maze = [[self.Cell(r, c, self) for c in range(cols)] for r in range(rows)]
+        startY, startX = rnd.randint(0, rows - 1), rnd.randint(0, cols - 1)
+        self.startCell = self.maze[startY][startX]
+        self.startCell.isStart = True
+        self.mazeBacktracking(self.startCell)
+        self.exitCell = self.findFurthestCell(self.startCell)
+        self.exitCell.isExit = True
         return self.maze
 
-    def removeWalls(self, currentCell, nextCell):
-        delta = (nextCell.col - currentCell.col, nextCell.row - currentCell.row)
-        if wallInfo := self.directionMap.get(delta):
-            currentCell.walls[wallInfo["currentWall"]] = False
-            nextCell.walls[wallInfo["nextWall"]] = False
+    def mazeBacktracking(self, cell):
+        cell.visited = True
+        while neighbors := self.getUnvisitedNeighbors(cell):
+            nextCell = rnd.choice(neighbors)
+            self.removeWalls(cell, nextCell)
+            self.mazeBacktracking(nextCell)
 
     def getUnvisitedNeighbors(self, cell):
         neighbors = []
-        for (dr, dc), _ in self.directionMap.items():
-            newR = cell.row + dr
-            newC = cell.col + dc
-            # Check boundaries and visited status
+        for dr, dc in self.directionMap:
+            newR, newC = cell.row + dr, cell.col + dc
+            if (
+                0 <= newR < self.rows
+                and 0 <= newC < self.cols
+                and not self.maze[newR][newC].visited
+            ):
+                neighbors.append(self.maze[newR][newC])
+        return neighbors
+
+    def removeWalls(self, currentCell, nextCell):
+        delta = (nextCell.col - currentCell.col, nextCell.row - currentCell.row)
+        wallInfo = self.directionMap[delta]
+        currentCell.walls[wallInfo["currentWall"]] = False
+        nextCell.walls[wallInfo["nextWall"]] = False
+
+    def getCellDetails(self, row, col):
+        cellWidth = self.mazeWidth // self.cols
+        cellHeight = self.mazeHeight // self.rows
+        cellLeft = self.mazeLeft + col * cellWidth
+        cellTop = self.mazeTop + row * cellHeight
+        return cellWidth, cellHeight, cellLeft, cellTop
+
+    def getUnvisitedNeighbors(self, cell):
+        neighbors = []
+        for dr, dc in self.directionMap:
+            newR, newC = cell.row + dr, cell.col + dc
             if (
                 0 <= newR < self.rows
                 and 0 <= newC < self.cols
@@ -366,7 +372,6 @@ class MazeState(GameState):
         return neighbors
 
     def findExit(self, start):
-        print(f"Finding exit from start {start}")
         queue = [(start, 0)]
         visited = [[False for _ in range(self.cols)] for _ in range(self.rows)]
         visited[start.col][start.row] = True
@@ -386,21 +391,71 @@ class MazeState(GameState):
                     visited[neighbor.col][neighbor.row] = True
                     queue.append((neighbor, distance + 1))
         furthestExit.isExit = True
-        print(f"Exit found at {furthestExit} with distance {furthestDistance}")
 
     def mazeBacktrack(self, currentCell):
         currentCell.visited = True
         neighbors = self.getUnvisitedNeighbors(currentCell)
-        rnd.shuffle(
-            neighbors
-        )  # Shuffle the neighbors to ensure random order of traversal
 
-        for nextCell in neighbors:
-            if not nextCell.visited:  # If the neighbor hasn't been visited
+        while neighbors:
+            nextCell = neighbors.pop()
+            if not nextCell.visited:
                 self.removeWalls(currentCell, nextCell)
-                self.mazeBacktrack(nextCell)  # Recursively visit the next cell
+                self.mazeBacktrack(nextCell)
+
+    def findFurthestCell(self, startCell):
+        queue = [(startCell, 0)]
+        visited = [[False for _ in range(self.cols)] for _ in range(self.rows)]
+        visited[startCell.row][startCell.col] = True
+
+        furthestCell = startCell
+        maxDistance = 0
+
+        while queue:
+            currentCell, distance = queue.pop(0)
+
+            if distance > maxDistance:
+                furthestCell = currentCell
+                maxDistance = distance
+
+            for neighbor in self.getValidNeighbors(currentCell):
+                if not visited[neighbor.row][neighbor.col]:
+                    queue.append((neighbor, distance + 1))
+                    visited[neighbor.row][neighbor.col] = True
+
+        return furthestCell
+
+    def findFastestPath(self, startCell, exitCell):
+        queue = deque([(startCell, [startCell])])
+        visited = set([startCell])
+
+        while queue:
+            cell, path = queue.popleft()
+            for neighbor in self.getValidNeighbors(cell):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    newPath = path + [neighbor]
+                    if neighbor == exitCell:
+                        return newPath
+                    queue.append((neighbor, newPath))
+
+        return None
+
+    def getValidNeighbors(self, cell):
+        # This method should be updated to return only neighbors without walls between
+        neighbors = []
+        for direction in self.directionMap:
+            dr, dc = direction
+            newR, newC = cell.row + dr, cell.col + dc
+            if (
+                0 <= newR < self.rows
+                and 0 <= newC < self.cols
+                and self.isMovePossible(cell, self.maze[newR][newC])
+            ):
+                neighbors.append(self.maze[newR][newC])
+        return neighbors
 
     def isMovePossible(self, fromCell, toCell):
+        # This method should be updated to check if there is no wall between cells
         delta = (toCell.col - fromCell.col, toCell.row - fromCell.row)
         wallInfo = self.directionMap.get(delta)
         return not fromCell.walls[wallInfo["currentWall"]] if wallInfo else False
@@ -417,21 +472,7 @@ class MazeState(GameState):
                 neighbors.append(self.maze[cell.col + dc][cell.row + dr])
         return neighbors
 
-    def findFastestPath(self, start, exit):
-        queue = deque([(start, [start])])
-        visited = {start}
-
-        while queue:
-            (cell, path) = queue.popleft()
-            for neighbor in self.getValidNeighbors(cell):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    newPath = path + [neighbor]
-                    if neighbor == exit:
-                        return newPath
-                    queue.append((neighbor, newPath))
-
     def draw(self):
         for row in range(self.rows):
             for col in range(self.cols):
-                self.maze[row][col].draw(row, col)
+                self.maze[row][col].draw()
