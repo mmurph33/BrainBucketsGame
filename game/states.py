@@ -134,17 +134,17 @@ class StartGameState(GameState):
 
         self.messages = [
             "Welcome to 'BrainBasket!",
-            "In this game, it's not just about your skills on the court or your smarts",
+            "It's not just about your skills or your smarts",
             "it's about balancing both to achieve greatness!",
             "Here's how it works:",
             "Each round, you'll face a brain-teasing challenge.",
             "Solve it as quickly and accurately as you can.",
             "Your score for this task is crucial, but there's more to it.",
-            "After solving the puzzle, you'll step onto the court with a basketball in hand.",
+            "After each puzzle, you'll shoot a basketball.",
             "Your accumulated points will determine your shot accuracy.",
             "Sink the shot to keep your score!",
             "But remember, the clock is ticking!",
-            "You have 2 minutes to complete as many rounds as possible and rack up the highest score you can.",
+            "You have 2 minutes to complete as many rounds as possible.",
             "Are you ready to train your brain and your game?",
             "Let's hit the court and show what you're made of!",
         ]
@@ -152,11 +152,11 @@ class StartGameState(GameState):
         self.instructions = "Press 'Enter' to begin your first puzzle!"
 
     def draw(self):
-        for i in range(self.messages):
+        for i in range(len(self.messages)):
             drawLabel(
                 self.messages[i],
                 440,
-                50 + (65 * i),
+                50 + (58 * i),
                 size=20,
                 font="Super Legend Boy",
                 fill="black",
@@ -167,3 +167,53 @@ class StartGameState(GameState):
     def onKeyPress(self, key):
         if key == "Space":
             self.gameApp.gameStateManager.startRandomPuzzle()
+
+
+class LeaderboardState(GameState):
+    def __init__(self, app):
+        super().__init__(app)
+        self.title = "Leaderboard"
+        self.description = "Top 10 Players"
+
+    def draw(self):
+        drawLabel(
+            self.title,
+            app.width / 2,
+            100,
+            size=50,
+            fill=gradient("mediumSlateBlue", "mediumPurple", "blueViolet"),
+            font="Super Legend Boy",
+        )
+        drawLabel(
+            self.description,
+            app.width / 2,
+            150,
+            size=20,
+            fill=gradient("mediumSlateBlue", "mediumPurple", "blueViolet"),
+            font="Super Legend Boy",
+        )
+
+
+class TutorialState(GameState):
+    def __init__(self, app):
+        super().__init__(app)
+        self.title = "Tutorial"
+        self.description = "How to Play"
+
+    def draw(self):
+        drawLabel(
+            self.title,
+            app.width / 2,
+            100,
+            size=50,
+            fill=gradient("mediumSlateBlue", "mediumPurple", "blueViolet"),
+            font="Super Legend Boy",
+        )
+        drawLabel(
+            self.description,
+            app.width / 2,
+            150,
+            size=20,
+            fill=gradient("mediumSlateBlue", "mediumPurple", "blueViolet"),
+            font="Super Legend Boy",
+        )

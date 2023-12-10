@@ -1,6 +1,12 @@
 from PIL import Image as PILImage
 from cmu_graphics import *
-from states import GameStateManager, MainMenuState, GameState
+from states import (
+    GameStateManager,
+    MainMenuState,
+    StartGameState,
+    LeaderboardState,
+    TutorialState,
+)
 from tools import Button
 
 
@@ -8,6 +14,9 @@ def gameConfiguration(app):
     app.stepsPerSecond = 100
     app.gameStateManager = GameStateManager()
     app.gameStateManager.addState("MainMenu", MainMenuState(app))
+    app.gameStateManager.addState("Leaderboard", LeaderboardState(app))
+    app.gameStateManager.addState("StartGame", StartGameState(app))
+    app.gameStateManager.addState("Tutorial", TutorialState(app))
 
 
 def appMedia(app):
