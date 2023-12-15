@@ -4,6 +4,7 @@ from PIL import Image as PILImage
 from tools import Button
 from collections import deque
 import random as rnd
+import time
 
 
 class GameState:
@@ -279,6 +280,7 @@ class MazeState(GameState):
                     borderWidth=1,
                     align="center",
                 )
+                
             wall_positions = {
                 "top": (cellLeft, cellTop, cellLeft + cellWidth, cellTop),
                 "bottom": (
@@ -303,7 +305,7 @@ class MazeState(GameState):
         super().__init__(app)
         self.rows = 6
         self.cols = 6
-        self.mazeWidth, self.mazeHeight, self.mazeLeft, self.mazeTop = (
+        self.mazeWidth, self.mazeHeight, self.mazreLeft, self.mazeTop = (
             self.gameApp.width // 3,
         ) * 4
         self.directionMap = {
@@ -316,11 +318,13 @@ class MazeState(GameState):
         self.gameApp.background = gradient(
             "steelBlue", "navy", "midnightBlue", start="top"
         )
+        self.dotLocation = None
 
     def generateMaze(self, rows, cols):
         self.maze = [[self.Cell(r, c, self) for c in range(cols)] for r in range(rows)]
         startY, startX = rnd.randint(0, rows - 1), rnd.randint(0, cols - 1)
         self.startCell = self.maze[startY][startX]
+        self.dotLocation = self.dotLocation
         self.startCell.isStart = True
         self.mazeBacktracking(self.startCell)
         self.exitCell = self.findFurthestCell(self.startCell)
@@ -426,7 +430,7 @@ class MazeState(GameState):
 
     def findFastestPath(self, startCell, exitCell):
         queue = deque([(startCell, [startCell])])
-        visited = set([startCell])
+        visited = {startCell}
 
         while queue:
             cell, path = queue.popleft()
@@ -441,7 +445,6 @@ class MazeState(GameState):
         return None
 
     def getValidNeighbors(self, cell):
-        # This method should be updated to return only neighbors without walls between
         neighbors = []
         for direction in self.directionMap:
             dr, dc = direction
@@ -476,3 +479,232 @@ class MazeState(GameState):
         for row in range(self.rows):
             for col in range(self.cols):
                 self.maze[row][col].draw()
+                if (row, col) == self.dotLocation:
+                    self.maze[row][col].drawDot()
+
+
+# ! Maze Dynamics
+# ? ------------------------------------------------------------
+
+
+
+
+
+"""class MazeGame:
+    def __init__(self, stateManager):
+        app.rows = 6
+        app.cols = 6
+        app.mazeLeft = 250
+        app.mazeTop = 250
+        app.mazeWidth = 300
+        app.mazeHeight = 300
+        app.start = Cell(0, 0)
+        app.exit = Cell(5, 5)
+        app.maze = generateMaze(app.rows, app.cols)
+        app.fastestPath = findFastestPath(app.maze, app.start, app.exit)
+        app.dotRow = app.start.r
+        app.dotCol = app.start.c
+        app.startTime = None
+        app.elapsedTime = None
+        app.mazeCompleted = False
+        app.startedMaze = False
+        app.endTime = None
+        app.moves = 0
+        app.visitedPositions = []
+        app.dotVisited = []
+        app.wrongMoves = 0
+        app.fewestSteps = len(app.fastestPath)
+        app.background = gradient("steelBlue", "navy", "midnightBlue", start="top")
+
+
+def onStep(self):
+    if app.startedMaze:
+        app.elapsedTime = (
+            app.endTime if app.mazeCompleted else rounded(time.time() - app.startTime)
+        )
+
+
+def onKeyPress(self, key):
+    if not app.startedMaze:
+        app.startedMaze = True
+        app.startTime = time.time()
+    if key == "up":
+        moveDot(app, -1, 0)
+    elif key == "down":
+        moveDot(app, 1, 0)
+    elif key == "left":
+        moveDot(app, 0, -1)
+    elif key == "right":
+        moveDot(app, 0, 1)
+
+
+def moveDot(app, dRow, dCol):
+    newRow = app.dotRow + dRow
+    newCol = app.dotCol + dCol
+    if isValidMove(app, newRow, newCol, dRow, dCol):
+        app.dotVisited.append((app.dotRow, app.dotCol))
+        app.dotRow, app.dotCol = newRow, newCol
+        app.maze[app.dotRow][app.dotCol].visited = True
+        app.visitedPositions.append((app.dotRow, app.dotCol))
+        checkMazeCompletion(app)
+        app.moves += 1
+
+
+def isValidMove(app, newRow, newCol, dRow, dCol):
+    if 0 <= newRow < app.rows and 0 <= newCol < app.cols:
+        currentCell = app.maze[app.dotRow][app.dotCol]
+        return not currentCell.walls[getWallDirection(dRow, dCol)]
+    app.wrongMoves += 1
+    return False
+
+
+def getWallDirection(dRow, dCol):
+    if dRow == -1:
+        return "top"
+    elif dRow == 1:
+        return "bottom"
+    elif dCol == -1:
+        return "left"
+    elif dCol == 1:
+        return "right"
+
+
+#
+def checkMazeCompletion(app):
+    if (app.dotRow, app.dotCol) == (app.exit.r, app.exit.c):
+        app.mazeCompleted = True
+        app.endTime = app.elapsedTime
+
+
+def redrawAll(app):
+    drawMaze(app)
+    timeAdjustmentRate = 0.75
+    expectedTime = app.fewestSteps * timeAdjustmentRate
+    if not app.mazeCompleted:
+        drawLabel(
+            f"Moves: {app.moves}",
+            400,
+            675,
+            size=25,
+            fill="hotPink",
+            align="center",
+            font="Super Legend Boy",
+        )
+        drawLabel(
+            f"Time: {app.elapsedTime or 0}s",
+            400,
+            725,
+            size=25,
+            fill="hotPink",
+            align="center",
+            font="Super Legend Boy",
+        )
+        drawLabel(
+            f"Score: {calculateScore(app)}",
+            400,
+            775,
+            size=25,
+            fill="hotPink",
+            align="center",
+            font="Super Legend Boy",
+        )
+    else:
+        drawLabel(
+            f"Maze completed in {app.moves} steps and {app.elapsedTime} seconds.",
+            app.width / 2,
+            700,
+            size=25,
+            fill="hotPink",
+            align="center",
+            font="Super Legend Boy",
+        )
+        drawLabel(
+            f"Score: {calculateScore(app)}",
+            app.width / 2,
+            750,
+            size=25,
+            fill="deepPink",
+            align="center",
+            font="Super Legend Boy",
+        )
+    drawLabel(
+        f"Shortest Steps: {app.fewestSteps}",
+        400,
+        50,
+        size=25,
+        fill="hotPink",
+        align="center",
+        font="Super Legend Boy",
+    )
+    drawLabel(
+        f"Expected Time: {expectedTime}s",
+        400,
+        120,
+        size=25,
+        fill="hotPink",
+        align="center",
+        font="Super Legend Boy",
+    )
+
+
+def drawMaze(app):
+    for row in range(app.rows):
+        for col in range(app.cols):
+            app.maze[row][col].draw(row, col)
+    drawDot(app)
+
+
+def drawDot(app):
+    cellLeft, cellTop = getCellLeftTop(app, app.dotRow, app.dotCol)
+    cellWidth, cellHeight = getCellSize(app)
+    drawCircle(
+        cellLeft + cellWidth / 2,
+        cellTop + cellHeight / 2,
+        min(cellWidth, cellHeight) / 4,
+        fill="darkViolet",
+        border="darkMagenta",
+        borderWidth=1,
+        align="center",
+    )
+
+
+def calculateScore(app):
+    baseScore = 800
+    stepPenalty = 50
+    invalidMovePenalty = 50
+    timeAdjustmentRate = 0.75
+
+    playerTime = app.elapsedTime if app.elapsedTime is not None else 0
+    playerSteps = app.moves
+    invalidMoves = app.wrongMoves
+
+    expectedTime = app.fewestSteps * timeAdjustmentRate
+    timeDifference = playerTime - expectedTime
+    extraSteps = max(playerSteps - app.fewestSteps, 0)
+
+    if timeDifference > 0:
+        timePenalty = 25
+        score = (
+            baseScore
+            - (timePenalty * timeDifference)
+            - (stepPenalty * extraSteps)
+            - (invalidMovePenalty * invalidMoves)
+        )
+    else:
+        timeBonus = 50
+        score = (
+            baseScore
+            + (timeBonus * abs(timeDifference))
+            - (stepPenalty * extraSteps)
+            - (invalidMovePenalty * invalidMoves)
+        )
+
+    return max(score, 0)
+
+
+def main():
+    runApp(width=800, height=800)
+
+
+main()
+"""

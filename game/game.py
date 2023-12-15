@@ -55,7 +55,7 @@ def redrawAll(app):
 
 
 def main():
-    runApp(width=880, height=880)
+    app = runApp(width=880, height=880)
 
 
 main()
