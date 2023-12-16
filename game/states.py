@@ -4,6 +4,7 @@ from PIL import Image as PILImage
 from tools import Button
 from collections import deque
 import random as rnd
+import time
 
 
 class GameState:
@@ -138,17 +139,18 @@ class StartGameState(GameState):
 
         self.messages = [
             "Welcome to 'BrainBasket!",
-            "In this game, it's not just about your skills on the court or your smarts",
+            "Life isn't just about your ball skills or your smarts",
             "it's about balancing both to achieve greatness!",
             "Here's how it works:",
             "Each round, you'll face a brain-teasing challenge.",
             "Solve it as quickly and accurately as you can.",
             "Your score for this task is crucial, but there's more to it.",
-            "After solving the puzzle, you'll step onto the court with a basketball in hand.",
+            "After the puzzle, you'll hit the court with a basketball in hand.",
             "Your accumulated points will determine your shot accuracy.",
             "Sink the shot to keep your score!",
             "But remember, the clock is ticking!",
-            "You have 2 minutes to complete as many rounds as possible and rack up the highest score you can.",
+            "You have 2 minutes to complete as many rounds as possible",
+            "Rack up the highest score you can.",
             "Are you ready to train your brain and your game?",
             "Let's hit the court and show what you're made of!",
         ]
@@ -160,13 +162,13 @@ class StartGameState(GameState):
             drawLabel(
                 self.messages[i],
                 440,
-                50 + (65 * i),
-                size=20,
+                50 + (50 * i),
+                size=18,
                 font="Super Legend Boy",
-                fill="black",
+                fill="hotPink",
             )
 
-        drawLabel(self.instructions, 440, 850, size=20, fill="grey")
+        drawLabel(self.instructions, 440, 825, size=20, fill="grey")
 
     def onKeyPress(self, key):
         if key == "space":
@@ -255,7 +257,7 @@ class MazeState(GameState):
             cellTop = self.mazeState.mazeTop + self.row * cellHeight
             return cellWidth, cellHeight, cellLeft, cellTop
 
-        def draw(self):
+        def draw(self, isDot=False):
             cellWidth, cellHeight, cellLeft, cellTop = self.getCellDetails()
             if self.isStart:
                 drawRect(
@@ -279,6 +281,9 @@ class MazeState(GameState):
                     borderWidth=1,
                     align="center",
                 )
+            if isDot:
+                drawCircle(cellLeft + cellWidth / 2, cellTop + cellHeight / 2, min(cellWidth, cellHeight) / 4, fill="darkViolet", border="darkMagenta", borderWidth=1, align="center")
+
             wall_positions = {
                 "top": (cellLeft, cellTop, cellLeft + cellWidth, cellTop),
                 "bottom": (
@@ -303,6 +308,7 @@ class MazeState(GameState):
         super().__init__(app)
         self.rows = 6
         self.cols = 6
+        self.dot = (0, 0)
         self.mazeWidth, self.mazeHeight, self.mazeLeft, self.mazeTop = (
             self.gameApp.width // 3,
         ) * 4
@@ -316,15 +322,26 @@ class MazeState(GameState):
         self.gameApp.background = gradient(
             "steelBlue", "navy", "midnightBlue", start="top"
         )
+        self.wrongMoves = 0
+        self.startTime = None
+        self.elapsedTime = None
+        self.endTime = None
+        self.moves = 0
+        self.score = 0
+        self.mazeCompleted = False
+        self.startedMaze = False
+        
 
     def generateMaze(self, rows, cols):
         self.maze = [[self.Cell(r, c, self) for c in range(cols)] for r in range(rows)]
         startY, startX = rnd.randint(0, rows - 1), rnd.randint(0, cols - 1)
         self.startCell = self.maze[startY][startX]
+        self.dot = (self.startCell.row, self.startCell.col)
         self.startCell.isStart = True
         self.mazeBacktracking(self.startCell)
-        self.exitCell = self.findFurthestCell(self.startCell)
+        self.exitCell = self.findExit(self.startCell)
         self.exitCell.isExit = True
+        self.fewestSteps = len(self.findFastestPath(self.startCell, self.exitCell)) - 1
         return self.maze
 
     def mazeBacktracking(self, cell):
@@ -359,63 +376,20 @@ class MazeState(GameState):
         cellTop = self.mazeTop + row * cellHeight
         return cellWidth, cellHeight, cellLeft, cellTop
 
-    def getUnvisitedNeighbors(self, cell):
-        neighbors = []
-        for dr, dc in self.directionMap:
-            newR, newC = cell.row + dr, cell.col + dc
-            if (
-                0 <= newR < self.rows
-                and 0 <= newC < self.cols
-                and not self.maze[newR][newC].visited
-            ):
-                neighbors.append(self.maze[newR][newC])
-        return neighbors
 
     def findExit(self, start):
-        queue = [(start, 0)]
-        visited = [[False for _ in range(self.cols)] for _ in range(self.rows)]
-        visited[start.col][start.row] = True
+        rows, cols = len(self.maze), len(self.maze[0])
+        queue = deque([(start, 0)])
+        visited = [[False for _ in range(cols)] for _ in range(rows)]
+        visited[start.row][start.col] = True
 
-        furthestExit = start
-        furthestDistance = 0
-
-        while queue:
-            cell, distance = queue.pop(0)
-
-            if distance > furthestDistance:
-                furthestDistance = distance
-                furthestExit = cell
-
-            for neighbor in self.getValidNeighbors(cell):
-                if not visited[neighbor.col][neighbor.row]:
-                    visited[neighbor.col][neighbor.row] = True
-                    queue.append((neighbor, distance + 1))
-        furthestExit.isExit = True
-
-    def mazeBacktrack(self, currentCell):
-        currentCell.visited = True
-        neighbors = self.getUnvisitedNeighbors(currentCell)
-
-        while neighbors:
-            nextCell = neighbors.pop()
-            if not nextCell.visited:
-                self.removeWalls(currentCell, nextCell)
-                self.mazeBacktrack(nextCell)
-
-    def findFurthestCell(self, startCell):
-        queue = [(startCell, 0)]
-        visited = [[False for _ in range(self.cols)] for _ in range(self.rows)]
-        visited[startCell.row][startCell.col] = True
-
-        furthestCell = startCell
-        maxDistance = 0
+        furthestCell, maxDistance = start, 0
 
         while queue:
-            currentCell, distance = queue.pop(0)
+            currentCell, distance = queue.popleft()
 
             if distance > maxDistance:
-                furthestCell = currentCell
-                maxDistance = distance
+                furthestCell, maxDistance = currentCell, distance
 
             for neighbor in self.getValidNeighbors(currentCell):
                 if not visited[neighbor.row][neighbor.col]:
@@ -424,9 +398,11 @@ class MazeState(GameState):
 
         return furthestCell
 
+
+
     def findFastestPath(self, startCell, exitCell):
         queue = deque([(startCell, [startCell])])
-        visited = set([startCell])
+        visited = {startCell}
 
         while queue:
             cell, path = queue.popleft()
@@ -460,19 +436,84 @@ class MazeState(GameState):
         wallInfo = self.directionMap.get(delta)
         return not fromCell.walls[wallInfo["currentWall"]] if wallInfo else False
 
-    def getValidNeighbors(self, cell):
-        neighbors = []
-        for direction in self.directionMap:
-            dc, dr = direction
-            if (
-                0 <= cell.col + dc < self.cols
-                and 0 <= cell.row + dr < self.rows
-                and self.isMovePossible(cell, self.maze[cell.col + dc][cell.row + dr])
-            ):
-                neighbors.append(self.maze[cell.col + dc][cell.row + dr])
-        return neighbors
+
+
+    def checkMazeCompletion(self):
+        if self.dot == (self.exitCell.row, self.exitCell.col):
+            self.mazeCompleted = True
+            self.endTime = self.elapsedTime
+            
+    def moveDot(self, direction):
+        direction_mapping = {
+            'up': (-1, 0),
+            'down': (1, 0),
+            'left': (0, -1),
+            'right': (0, 1)
+        }
+
+        if direction in direction_mapping:
+            dr, dc = direction_mapping[direction]
+            new_row, new_col = self.dot[0] + dr, self.dot[1] + dc
+            if (0 <= new_row < self.rows and 0 <= new_col < self.cols and
+                self.isMovePossible(self.maze[self.dot[0]][self.dot[1]], self.maze[new_row][new_col])):
+                self.dot = (new_row, new_col)
+                self.moves += 1
+                self.checkMazeCompletion()
+            else:
+                self.wrongMoves += 1
+
+    def calculateScore(self):
+        baseScore = 800
+        stepPenalty = 50
+        invalidMovePenalty = 50
+        timeAdjustmentRate = 0.75
+
+        playerTime = self.elapsedTime if self.elapsedTime is not None else 0
+        playerSteps = self.moves
+        invalidMoves = self.wrongMoves
+
+        expectedTime = self.fewestSteps * timeAdjustmentRate
+        timeDifference = playerTime - expectedTime
+        extraSteps = max(playerSteps - self.fewestSteps, 0)
+
+        if timeDifference > 0:
+            timePenalty = 25
+            score = baseScore - (timePenalty * timeDifference) - (stepPenalty * extraSteps) - (invalidMovePenalty * invalidMoves)
+        else:
+            timeBonus = 50
+            score = baseScore + (timeBonus * abs(timeDifference)) - (stepPenalty * extraSteps) - (invalidMovePenalty * invalidMoves)
+
+        return max(score, 0)
+
+    def onStep(self):
+        if self.startedMaze:
+            self.elapsedTime = (
+                self.endTime if self.mazeCompleted else rounded(time.time() - self.startTime)
+            )
+
+    def onKeyPress(self, key):
+        if not self.startedMaze:
+            self.startedMaze = True
+            self.startTime = time.time()
+        # Simplified key press handling
+        if key in ['up', 'down', 'left', 'right']:
+            self.moveDot(key)                
 
     def draw(self):
         for row in range(self.rows):
             for col in range(self.cols):
-                self.maze[row][col].draw()
+                isDot = (row, col) == self.dot
+                self.maze[row][col].draw(isDot)
+
+        if not self.mazeCompleted:
+            drawLabel(f"Moves: {self.moves}", 400, 675, size=25, fill='hotPink', align="center", font="Super Legend Boy")
+            drawLabel(f"Time: {self.elapsedTime or 0}s", 400, 725, size=25, fill="hotPink", align="center", font="Super Legend Boy")
+            drawLabel(f"Score: {self.calculateScore()}", 400, 775, size=25, fill="hotPink", align="center", font="Super Legend Boy")
+        else:
+            drawLabel(f"Maze completed in {self.moves} steps and {self.elapsedTime} seconds.", 440, 700, size=25, fill="hotPink", align="center", font="Super Legend Boy")
+            drawLabel(f"Score: {self.calculateScore()}", 440, 750, size=25, fill="deepPink", align="center", font="Super Legend Boy")
+            timeAdjustmentRate = .65
+            expectedTime = self.fewestSteps * timeAdjustmentRate
+            drawLabel(f"Expected Time: {expectedTime}s", 440, 120, size=25, fill="hotPink", align="center", font="Super Legend Boy")
+
+                

@@ -9,6 +9,7 @@ from states import (
     MazeState,
 )
 from tools import Button
+import time
 
 
 def gameConfiguration(app):

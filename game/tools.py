@@ -10,7 +10,7 @@ class Button:
         height,
         text,
         action,
-        size=12,
+        size=16,
         color="black",
         font="Super Legend Boy",
         border="black",
@@ -46,4 +46,7 @@ class Button:
             cx,
             cy,
             align="center",
+            size=16,
+            fill="navy",
+            font="Super Legend Boy"
         )
